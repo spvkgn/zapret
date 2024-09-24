@@ -3,12 +3,12 @@ name: build
 on:
   workflow_dispatch:
   push:
-    branches: [master]
-    paths:
-      - 'ip2net/**'
-      - 'mdig/**'
-      - 'nfq/**'
-      - 'tpws/**'
+  #   branches: [master]
+  #   paths:
+  #     - 'ip2net/**'
+  #     - 'mdig/**'
+  #     - 'nfq/**'
+  #     - 'tpws/**'
 
 jobs:
   build:
@@ -19,38 +19,23 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            tool: aarch64-unknown-linux-musl
-          - arch: arm
-            tool: arm-unknown-linux-musleabi
-          - arch: armhf
-            tool: arm-unknown-linux-musleabihf
+            target: 'armsr/armv8'
           - arch: armv7
-            tool: armv7-unknown-linux-musleabi
-          - arch: armv7hf
-            tool: armv7-unknown-linux-musleabihf
-          - arch: mips64el
-            tool: mips64el-unknown-linux-musl
-          - arch: mips64
-            tool: mips64-unknown-linux-musl
-          - arch: mipsel
-            tool: mipsel-unknown-linux-musl
-          - arch: mipselsf
-            tool: mipsel-unknown-linux-muslsf
+            target: 'armsr/armv7'
           - arch: mips
-            tool: mips-unknown-linux-musl
-          - arch: mipssf
-            tool: mips-unknown-linux-muslsf
-          - arch: powerpc64
-            tool: powerpc64-unknown-linux-musl
-          - arch: powerpc
-            tool: powerpc-unknown-linux-musl
+            target: 'ath79/generic'
+          - arch: mipsel
+            target: 'ramips/mt7621'
+          - arch: mips64
+            target: 'octeon/generic'
+          - arch: ppc64
+            target: 'apm821xx/nand'
+          - arch: riscv64
+            target: 'sifiveu/generic'
           - arch: x86
-            tool: x86_64-multilib-linux-musl
-            env:
-              CFLAGS: '-m32'
-              LDFLAGS: '-m32'
+            target: 'x86/generic'
           - arch: x86-64
-            tool: x86_64-multilib-linux-musl
+            target: 'x86/64'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,37 +45,39 @@ jobs:
 
       - name: Set up build tools
         env:
-          REPO: 'spvkgn/musl-cross'
-          TOOL: ${{ matrix.tool }}
+          TARGET: ${{ matrix.target }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p $HOME/tools
-          wget -qO- https://github.com/$REPO/releases/download/latest/$TOOL.tar.xz | tar -C $HOME/tools -xJ || exit 1
-          [ -d "$HOME/tools/$TOOL/bin" ] && echo "$HOME/tools/$TOOL/bin" >> $GITHUB_PATH
+          BASE_URL=https://downloads.openwrt.org/releases
+          VERSION=$(gh api repos/openwrt/openwrt/releases/latest --jq '.tag_name' | sed 's/^v//')
+          mkdir -p $HOME/openwrt/staging_dir
+          TOOLCHAIN=$(wget -qO- $BASE_URL/$VERSION/targets/$TARGET | grep -Po 'href="\Kopenwrt-toolchain.+?(?=")')
+          wget $BASE_URL/$VERSION/targets/$TARGET/$TOOLCHAIN $BASE_URL/$VERSION/targets/$TARGET/sha256sums
+          grep 'openwrt-toolchain' sha256sums | sha256sum -c - && tar -C $HOME/openwrt -xf $TOOLCHAIN
+          find $HOME/openwrt -maxdepth 3 -path '*/openwrt-*/bin' -type d >> $GITHUB_PATH
 
-      - name: Build [${{ matrix.arch }}]
+      - name: Build
         id: build
         env:
           ARCH: ${{ matrix.arch }}
-          TOOL: ${{ matrix.tool }}
-          CFLAGS: ${{ matrix.env.CFLAGS }}
-          LDFLAGS: ${{ matrix.env.LDFLAGS }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export CC="$TOOL-gcc"
-          export LD=$TOOL-ld
-          export AR=$TOOL-ar
-          export NM=$TOOL-nm
-          export STRIP=$TOOL-strip
+          TARGET=$(find $HOME/openwrt -type f -name 'info.mk' -exec grep -Po 'TARGET_CROSS=\K.*' {} \;)
+          export CC=${TARGET}gcc
+          export LD=${TARGET}ld
+          export AR=${TARGET}ar
+          export NM=${TARGET}nm
+          export STRIP=${TARGET}strip
+          export STAGING_DIR=$HOME/openwrt/staging_dir
 
           DEPS_DIR=$GITHUB_WORKSPACE/deps
-          COMMIT_SHA=$(gh api repos/${{ github.repository }}/commits/master --jq '.sha[:7]')
 
           # libnfnetlink
           git clone --depth 1 -b libnfnetlink-1.0.2 git://git.netfilter.org/libnfnetlink
           (
             cd libnfnetlink
             ./autogen.sh && \
-            ./configure --prefix= --host=$TOOL --enable-static --disable-shared && \
+            ./configure --prefix= --host=${TARGET%-} --enable-static --disable-shared && \
             make install -j$(nproc) DESTDIR=$DEPS_DIR
           )
 
@@ -99,7 +86,7 @@ jobs:
           (
             cd libmnl
             ./autogen.sh && \
-            ./configure --prefix= --host=$TOOL --enable-static --disable-shared && \
+            ./configure --prefix= --host=${TARGET%-} --enable-static --disable-shared && \
             make install -j$(nproc) DESTDIR=$DEPS_DIR
           )
 
@@ -110,7 +97,7 @@ jobs:
             ./autogen.sh && \
             LIBNFNETLINK_CFLAGS=-I$DEPS_DIR/include LIBNFNETLINK_LIBS=-L$DEPS_DIR/lib \
             LIBMNL_CFLAGS=-I$DEPS_DIR/include LIBMNL_LIBS=-L$DEPS_DIR/lib \
-            ./configure --prefix= --host=$TOOL --enable-static --disable-shared && \
+            ./configure --prefix= --host=${TARGET%-} --enable-static --disable-shared && \
             make install -j$(nproc) DESTDIR=$DEPS_DIR
           )
 
@@ -134,16 +121,18 @@ jobs:
             LDFLAGS="-Os -L$DEPS_DIR/lib $LDFLAGS" \
             make -C zapret/$i -j$(nproc)
           done
-          tar -C zapret -cJf zapret-$COMMIT_SHA-$ARCH.tar.xz ip2net/ip2net mdig/mdig nfq/nfqws tpws/tpws
+          SHA_SHORT=$(gh api repos/${{ github.repository }}/commits/master --jq '.sha[:7]')
+          tar -C zapret -cJf zapret-$SHA_SHORT-$ARCH.tar.xz ip2net/ip2net mdig/mdig nfq/nfqws tpws/tpws
 
       - name: Upload artifacts
         if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: zapret-${{ matrix.arch }}
+          name: zapret-owrt-${{ matrix.arch }}
           path: ./**/zapret-*.tar.xz
 
   release:
+    if: false
     needs: build
     permissions:
       contents: write
