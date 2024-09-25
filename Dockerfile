@@ -22,7 +22,7 @@ RUN <<'EOF'
 
     (
         cd zlib-*
-        ./configure --static
+        CFLAGS="-Os" ./configure --static
         make -j$(nproc)
         make install
     )

@@ -1,17 +1,17 @@
 name: Build zapret
 on:
   push:
-    paths:
-      - 'ip2net/**'
-      - 'mdig/**'
-      - 'nfq/**'
-      - 'tpws/**'
-  pull_request:
-    paths:
-      - 'ip2net/**'
-      - 'mdig/**'
-      - 'nfq/**'
-      - 'tpws/**'
+  #   paths:
+  #     - 'ip2net/**'
+  #     - 'mdig/**'
+  #     - 'nfq/**'
+  #     - 'tpws/**'
+  # pull_request:
+  #   paths:
+  #     - 'ip2net/**'
+  #     - 'mdig/**'
+  #     - 'nfq/**'
+  #     - 'tpws/**'
   workflow_dispatch:
 
 env:
@@ -67,7 +67,7 @@ jobs:
         run: |
           docker run --entrypoint=bash -v ${{ github.workspace }}:/work \
           zapret-musl-cross:${{ matrix.arch }} \
-          -c 'cd /work; CC=$TARGET_CC CFLAGS="-static" make -j$(nproc)'
+          -c 'cd /work; CC=$TARGET_CC CFLAGS="-Os -static" make -j$(nproc)'
 
       - name: Declare short commit variable
         id: vars
@@ -77,5 +77,5 @@ jobs:
       - name: Upload output file
         uses: actions/upload-artifact@v4
         with:
-          name: zapret_${{ steps.vars.outputs.sha_short }}_${{ matrix.arch }}
+          name: zapret_rust-musl-cross_${{ matrix.arch }}
           path: binaries/my/
