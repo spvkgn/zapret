@@ -48,6 +48,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # sudo apt update -qq && sudo apt install -y libbsd-dev libcap-dev
           BASE_URL=https://downloads.openwrt.org/releases
           VERSION=$(gh api repos/openwrt/openwrt/releases/latest --jq '.tag_name' | sed 's/^v//')
           mkdir -p $HOME/openwrt/staging_dir
@@ -108,7 +109,7 @@ jobs:
             make -C zapret/$i -j$(nproc)
           done
           SHA_SHORT=$(gh api repos/${{ github.repository }}/commits/master --jq '.sha[:7]')
-          tar -C zapret -cJf zapret-$SHA_SHORT-$ARCH.tar.xz ip2net/ip2net mdig/mdig nfq/nfqws tpws/tpws
+          tar -C zapret -cJf zapret-$SHA_SHORT-$ARCH.tar.xz --transform 's|.*/||' ip2net/ip2net mdig/mdig nfq/nfqws tpws/tpws
 
       - name: Upload artifacts
         if: steps.build.outcome == 'success'
