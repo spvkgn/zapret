@@ -3,12 +3,12 @@ name: build
 on:
   workflow_dispatch:
   push:
-    branches: [master]
-    paths:
-      - 'ip2net/**'
-      - 'mdig/**'
-      - 'nfq/**'
-      - 'tpws/**'
+    # branches: [master]
+    # paths:
+    #   - 'ip2net/**'
+    #   - 'mdig/**'
+    #   - 'nfq/**'
+    #   - 'tpws/**'
 
 jobs:
   build:
@@ -63,56 +63,42 @@ jobs:
           REPO: 'spvkgn/musl-cross'
           TOOL: ${{ matrix.tool }}
         run: |
+          sudo apt update -qq && sudo apt install -y libcap-dev
           mkdir -p $HOME/tools
           wget -qO- https://github.com/$REPO/releases/download/latest/$TOOL.tar.xz | tar -C $HOME/tools -xJ || exit 1
           [ -d "$HOME/tools/$TOOL/bin" ] && echo "$HOME/tools/$TOOL/bin" >> $GITHUB_PATH
 
-      - name: Build [${{ matrix.arch }}]
+      - name: Build
         id: build
         env:
           ARCH: ${{ matrix.arch }}
-          TOOL: ${{ matrix.tool }}
+          TARGET: ${{ matrix.tool }}
           CFLAGS: ${{ matrix.env.CFLAGS }}
           LDFLAGS: ${{ matrix.env.LDFLAGS }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export CC="$TOOL-gcc"
-          export LD=$TOOL-ld
-          export AR=$TOOL-ar
-          export NM=$TOOL-nm
-          export STRIP=$TOOL-strip
-
           DEPS_DIR=$GITHUB_WORKSPACE/deps
-          COMMIT_SHA=$(gh api repos/${{ github.repository }}/commits/master --jq '.sha[:7]')
+          export CC="$TARGET-gcc"
+          export LD=$TARGET-ld
+          export AR=$TARGET-ar
+          export NM=$TARGET-nm
+          export STRIP=$TARGET-strip
+          export PKG_CONFIG_PATH=$DEPS_DIR/lib/pkgconfig
 
-          # libnfnetlink
-          git clone --depth 1 -b libnfnetlink-1.0.2 git://git.netfilter.org/libnfnetlink
-          (
-            cd libnfnetlink
-            ./autogen.sh && \
-            ./configure --prefix= --host=$TOOL --enable-static --disable-shared && \
-            make install -j$(nproc) DESTDIR=$DEPS_DIR
-          )
-
-          # libmnl
+          # netfilter libs
           git clone --depth 1 -b libmnl-1.0.5 git://git.netfilter.org/libmnl
-          (
-            cd libmnl
-            ./autogen.sh && \
-            ./configure --prefix= --host=$TOOL --enable-static --disable-shared && \
-            make install -j$(nproc) DESTDIR=$DEPS_DIR
-          )
-
-          # libnetfilter_queue
+          git clone --depth 1 -b libnfnetlink-1.0.2 git://git.netfilter.org/libnfnetlink
           git clone --depth 1 -b libnetfilter_queue-1.0.5 git://git.netfilter.org/libnetfilter_queue
-          (
-            cd libnetfilter_queue
-            ./autogen.sh && \
-            LIBNFNETLINK_CFLAGS=-I$DEPS_DIR/include LIBNFNETLINK_LIBS=-L$DEPS_DIR/lib \
-            LIBMNL_CFLAGS=-I$DEPS_DIR/include LIBMNL_LIBS=-L$DEPS_DIR/lib \
-            ./configure --prefix= --host=$TOOL --enable-static --disable-shared && \
-            make install -j$(nproc) DESTDIR=$DEPS_DIR
-          )
+
+          for i in libmnl libnfnetlink libnetfilter_queue ; do
+            (
+              cd $i
+              ./autogen.sh && \
+              ./configure --prefix= --host=$TARGET --enable-static --disable-shared && \
+              make install -j$(nproc) DESTDIR=$DEPS_DIR
+            )
+            sed -i "s|^prefix=.*|prefix=$DEPS_DIR|g" $DEPS_DIR/lib/pkgconfig/$i.pc
+          done
 
           # zlib
           gh api repos/madler/zlib/releases/latest --jq '.tag_name' |\
@@ -124,17 +110,17 @@ jobs:
           )
 
           # headers
-          wget https://git.alpinelinux.org/aports/plain/main/bsd-compat-headers/queue.h && \
-          wget https://git.kernel.org/pub/scm/libs/libcap/libcap.git/plain/libcap/include/sys/capability.h && \
-          install -Dm644 -t $DEPS_DIR/include/sys queue.h capability.h
+          # wget https://git.alpinelinux.org/aports/plain/main/bsd-compat-headers/queue.h && \
+          # wget https://git.kernel.org/pub/scm/libs/libcap/libcap.git/plain/libcap/include/sys/capability.h && \
+          install -Dm644 -t $DEPS_DIR/include/sys /usr/include/x86_64-linux-gnu/sys/queue.h /usr/include/sys/capability.h
 
-          # build zapret
-          for i in ip2net mdig nfq tpws ; do
-            CFLAGS="-Os -static-libgcc -static -I$DEPS_DIR/include $CFLAGS" \
-            LDFLAGS="-Os -L$DEPS_DIR/lib $LDFLAGS" \
-            make -C zapret/$i -j$(nproc)
-          done
-          tar -C zapret -cJf zapret-$COMMIT_SHA-$ARCH.tar.xz ip2net/ip2net mdig/mdig nfq/nfqws tpws/tpws
+          # zapret
+          CFLAGS="-Os -static-libgcc -static -I$DEPS_DIR/include $CFLAGS" \
+          LDFLAGS="-Os -L$DEPS_DIR/lib $LDFLAGS" \
+          make -C zapret -j$(nproc)
+
+          SHA_SHORT=$(gh api repos/${{ github.repository }}/commits/master --jq '.sha[:7]')
+          tar -C zapret/binaries/my -cJf zapret-$SHA_SHORT-$ARCH.tar.xz .
 
       - name: Upload artifacts
         if: steps.build.outcome == 'success'
