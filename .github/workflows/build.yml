@@ -48,7 +48,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # sudo apt update -qq && sudo apt install -y libbsd-dev libcap-dev
+          sudo apt update -qq && sudo apt install -y libcap-dev
           BASE_URL=https://downloads.openwrt.org/releases
           VERSION=$(gh api repos/openwrt/openwrt/releases/latest --jq '.tag_name' | sed 's/^v//')
           mkdir -p $HOME/openwrt/staging_dir
@@ -98,18 +98,16 @@ jobs:
           )
 
           # headers
-          wget https://git.alpinelinux.org/aports/plain/main/bsd-compat-headers/queue.h && \
-          wget https://git.kernel.org/pub/scm/libs/libcap/libcap.git/plain/libcap/include/sys/capability.h && \
-          install -Dm644 -t $DEPS_DIR/include/sys queue.h capability.h
+          # wget https://git.alpinelinux.org/aports/plain/main/bsd-compat-headers/queue.h && \
+          # wget https://git.kernel.org/pub/scm/libs/libcap/libcap.git/plain/libcap/include/sys/capability.h && \
+          install -Dm644 -t $DEPS_DIR/include/sys /usr/include/x86_64-linux-gnu/sys/queue.h /usr/include/sys/capability.h
 
-          # build zapret
-          for i in ip2net mdig nfq tpws ; do
-            CFLAGS="-Os -static-libgcc -static -I$DEPS_DIR/include $CFLAGS" \
-            LDFLAGS="-Os -L$DEPS_DIR/lib $LDFLAGS" \
-            make -C zapret/$i -j$(nproc)
-          done
+          # zapret
+          CFLAGS="-Os -static-libgcc -static -I$DEPS_DIR/include $CFLAGS" \
+          LDFLAGS="-Os -L$DEPS_DIR/lib $LDFLAGS" \
+          make -C zapret -j$(nproc)
           SHA_SHORT=$(gh api repos/${{ github.repository }}/commits/master --jq '.sha[:7]')
-          tar -C zapret -cJf zapret-$SHA_SHORT-$ARCH.tar.xz --transform 's|.*/||' ip2net/ip2net mdig/mdig nfq/nfqws tpws/tpws
+          tar -C zapret/binaries/my -cJf zapret-$SHA_SHORT-$ARCH.tar.xz .
 
       - name: Upload artifacts
         if: steps.build.outcome == 'success'
