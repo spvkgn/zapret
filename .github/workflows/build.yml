@@ -11,8 +11,9 @@ on:
     #   - 'tpws/**'
 
 jobs:
-  build:
-    name: ${{ matrix.arch }}
+  build-linux:
+    if: false
+    # name: ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -129,8 +130,40 @@ jobs:
           name: zapret-${{ matrix.arch }}
           path: ./**/zapret-*.tar.xz
 
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          # path: zapret
+
+      - name: Set up msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          install: >-
+            gcc
+            make
+            zlib-devel
+
+      - name: Build winws
+        shell: msys2 {0}
+        run: |
+          make -C nfq cygwin
+          ls -la nfq
+          ldd nfq/winws.exe || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zapret-winws
+          path: ./**/nfq/winws.exe
+
   release:
-    needs: build
+    if: false
+    needs: [build-linux, build-windows]
     permissions:
       contents: write
     env:
