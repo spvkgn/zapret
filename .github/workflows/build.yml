@@ -134,7 +134,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, x86]
+        include:
+          - arch: x86_64
+            packages: >-
+              gcc-core
+              make
+              zlib-devel
+              zip
+              unzip
+              wget
+              psmisc
+          - arch: x86
+            packages: >-
+              gcc-core
+              make
+              zlib-devel
+              zip
+              unzip
+              wget
+              cygport
+              gettext-devel
+              libiconv-devel
+              libncurses-devel
     steps:
       - run: git config --global core.autocrlf input
       - name: Checkout
@@ -146,16 +167,24 @@ jobs:
         uses: cygwin/cygwin-install-action@v4
         with:
           platform: ${{ matrix.arch }}
-          packages: >-
-            gcc-core
-            make
-            zlib-devel
-            zip
-            unzip
-            wget
-            psmisc
+          packages: ${{ matrix.packages }}
 
-      - name: Build
+      - name: Build psmisc
+        if: matrix.arch == 'x86'
+        env:
+          VERSION: '23.4-4'
+        shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
+        run: >-
+          mkdir -p psmisc && cd psmisc &&
+          wget -O- https://mirrors.kernel.org/sourceware/cygwin/x86_64/release/psmisc/psmisc-${VERSION}-src.tar.xz | tar -xJ &&
+          cd psmisc-${VERSION}.src &&
+          echo CYGCONF_ARGS+=\" --disable-nls\" >> psmisc.cygport &&
+          cygport psmisc.cygport prep &&
+          cygport psmisc.cygport compile &&
+          cygport psmisc.cygport install &&
+          cp -a psmisc-*/inst/usr/bin/killall.exe /usr/bin
+
+      - name: Build zapret
         env:
           TARGET: ${{ matrix.arch == 'x86_64' && 'cygwin' || 'cygwin32' }}
           BITS: ${{ matrix.arch == 'x86_64' && '64' || '32' }}
@@ -177,7 +206,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zapret-cygwin-${{ matrix.arch }}
-          path: ./**/zapret-*.zip
+          path: zapret-*.zip
 
   release:
     needs: [build-linux, build-windows]
