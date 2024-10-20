@@ -136,7 +136,6 @@ jobs:
       matrix:
         arch: [x86_64, x86]
     steps:
-      - run: git config --global core.autocrlf input
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -153,15 +152,34 @@ jobs:
             zip
             unzip
             wget
-            psmisc
+            cygport
+            gettext-devel
+            libiconv-devel
+            libncurses-devel
 
-      - name: Build
+      - name: Build psmisc
+        env:
+          URL: https://mirrors.kernel.org/sourceware/cygwin/x86_64/release/psmisc
+        shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
+        run: >-
+          export MAKEFLAGS=-j$(nproc) &&
+          mkdir -p psmisc && cd psmisc &&
+          wget -qO- ${URL} | grep -Po 'href=\"\Kpsmisc-(\d+\.)+\d+.+src\.tar\.xz(?=\")' |
+          xargs -I{} wget -O- ${URL}/{} | tar -xJ &&
+          cd psmisc-*.src &&
+          echo CYGCONF_ARGS+=\" --disable-dependency-tracking --disable-nls\" >> psmisc.cygport &&
+          cygport psmisc.cygport prep compile install &&
+          cp -a psmisc-*/inst/usr/bin/killall.exe /usr/bin &&
+          ldd /usr/bin/killall.exe
+
+      - name: Build zapret
         env:
           TARGET: ${{ matrix.arch == 'x86_64' && 'cygwin' || 'cygwin32' }}
           BITS: ${{ matrix.arch == 'x86_64' && '64' || '32' }}
           DIR: ${{ matrix.arch == 'x86_64' && 'x64' || 'x86' }}
         shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
         run: >-
+          export MAKEFLAGS=-j$(nproc) &&
           mkdir -p output &&
           wget -O WinDivert.zip https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip &&
           unzip -jo WinDivert.zip '*/include/windivert.h' -d 'nfq/windows/windivert' &&
@@ -177,7 +195,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zapret-cygwin-${{ matrix.arch }}
-          path: ./**/zapret-*.zip
+          path: zapret-*.zip
 
   release:
     needs: [build-linux, build-windows]
