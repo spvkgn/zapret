@@ -151,7 +151,24 @@ jobs:
         with:
           ref: master
 
+      - name: Restore Cygwin from cache
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            C:\cygwin
+            C:\cygwin-packages
+          key: cygwin-${{ matrix.arch }}
+
+      - name: Apply Cygwin settings
+        if: steps.cache-restore.outputs.cache-hit == 'true'
+        shell: powershell
+        run: |
+          echo "C:\cygwin\bin" >> $env:GITHUB_PATH
+          C:\cygwin\bin\bash.exe --login
+
       - name: Set up Cygwin
+        if: steps.cache-restore.outputs.cache-hit != 'true'
         uses: cygwin/cygwin-install-action@v4
         with:
           platform: ${{ matrix.arch }}
@@ -176,8 +193,18 @@ jobs:
           xargs -I{} wget -O- ${URL}/{} | tar -xJ &&
           cd psmisc-*.src &&
           echo CYGCONF_ARGS+=\" --disable-dependency-tracking --disable-nls\" >> psmisc.cygport &&
-          cygport --debug psmisc.cygport prep compile install &&
+          cygport psmisc.cygport prep compile install &&
           cp -a psmisc-*/inst/usr/bin/killall.exe /usr/bin
+
+      - name: Save Cygwin to cache
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        id: cache-save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            C:\cygwin
+            C:\cygwin-packages
+          key: cygwin-${{ matrix.arch }}
 
       - name: Build zapret
         env:
