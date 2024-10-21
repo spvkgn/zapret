@@ -137,27 +137,14 @@ jobs:
         include:
           - arch: x86_64
             packages: >-
-              gcc-core
-              make
-              zlib-devel
-              zip
-              unzip
-              wget
               psmisc
           - arch: x86
             packages: >-
-              gcc-core
-              make
-              zlib-devel
-              zip
-              unzip
-              wget
               cygport
               gettext-devel
               libiconv-devel
               libncurses-devel
     steps:
-      - run: git config --global core.autocrlf input
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -167,21 +154,28 @@ jobs:
         uses: cygwin/cygwin-install-action@v4
         with:
           platform: ${{ matrix.arch }}
-          packages: ${{ matrix.packages }}
+          packages: >-
+            gcc-core
+            make
+            zlib-devel
+            zip
+            unzip
+            wget
+            ${{ matrix.packages }}
 
       - name: Build psmisc
         if: matrix.arch == 'x86'
         env:
-          VERSION: '23.4-4'
+          URL: https://mirrors.kernel.org/sourceware/cygwin/x86_64/release/psmisc
         shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
         run: >-
+          export MAKEFLAGS=-j$(nproc) &&
           mkdir -p psmisc && cd psmisc &&
-          wget -O- https://mirrors.kernel.org/sourceware/cygwin/x86_64/release/psmisc/psmisc-${VERSION}-src.tar.xz | tar -xJ &&
-          cd psmisc-${VERSION}.src &&
-          echo CYGCONF_ARGS+=\" --disable-nls\" >> psmisc.cygport &&
-          cygport psmisc.cygport prep &&
-          cygport psmisc.cygport compile &&
-          cygport psmisc.cygport install &&
+          wget -qO- ${URL} | grep -Po 'href=\"\Kpsmisc-(\d+\.)+\d+.+src\.tar\.xz(?=\")' |
+          xargs -I{} wget -O- ${URL}/{} | tar -xJ &&
+          cd psmisc-*.src &&
+          echo CYGCONF_ARGS+=\" --disable-dependency-tracking --disable-nls\" >> psmisc.cygport &&
+          cygport --debug psmisc.cygport prep compile install &&
           cp -a psmisc-*/inst/usr/bin/killall.exe /usr/bin
 
       - name: Build zapret
@@ -191,6 +185,7 @@ jobs:
           DIR: ${{ matrix.arch == 'x86_64' && 'x64' || 'x86' }}
         shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
         run: >-
+          export MAKEFLAGS=-j$(nproc) &&
           mkdir -p output &&
           wget -O WinDivert.zip https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip &&
           unzip -jo WinDivert.zip '*/include/windivert.h' -d 'nfq/windows/windivert' &&
