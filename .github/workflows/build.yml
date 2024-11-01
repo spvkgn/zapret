@@ -217,7 +217,16 @@ jobs:
           mingw32-make -C mdig win
           cp -a {ip2net/ip2net,mdig/mdig}.exe ../output
 
+      - name: Restore psmisc from cache
+        id: cache-restore-psmisc
+        uses: actions/cache/restore@v4
+        with:
+          path: psmisc
+          key: psmisc-${{ matrix.arch }}
+
       - name: Set up Cygwin
+        env:
+          PACKAGES: ${{ steps.cache-restore-psmisc.outputs.cache-hit != 'true' && 'cygport gettext-devel libiconv-devel libncurses-devel' || null }}
         uses: cygwin/cygwin-install-action@v4
         with:
           platform: ${{ matrix.arch }}
@@ -228,12 +237,10 @@ jobs:
             zip
             unzip
             wget
-            cygport
-            gettext-devel
-            libiconv-devel
-            libncurses-devel
+            ${{ env.PACKAGES }}
 
       - name: Build psmisc
+        if: steps.cache-restore-psmisc.outputs.cache-hit != 'true'
         env:
           URL: https://mirrors.kernel.org/sourceware/cygwin/x86_64/release/psmisc
         shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
@@ -243,9 +250,14 @@ jobs:
           wget -qO- ${URL} | grep -Po 'href=\"\Kpsmisc-(\d+\.)+\d+.+src\.tar\.xz(?=\")' | xargs -I{} wget -O- ${URL}/{} | tar -xJ &&
           cd psmisc-*.src &&
           echo CYGCONF_ARGS+=\" --disable-dependency-tracking --disable-nls\" >> psmisc.cygport &&
-          cygport psmisc.cygport prep compile install &&
-          cp -a psmisc-*/inst/usr/bin/killall.exe ../../output &&
-          ldd ../../output/killall.exe
+          cygport psmisc.cygport prep compile install
+
+      - name: Save psmisc to cache
+        if: steps.cache-restore-psmisc.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: psmisc
+          key: psmisc-${{ matrix.arch }}
 
       - name: Build winws
         env:
@@ -258,12 +270,13 @@ jobs:
           cp -a -t ../output nfq/winws.exe /usr/bin/cygwin1.dll &&
           ldd ../output/winws.exe
 
-      - name: Add WinDivert
+      - name: Add files to zip
         env:
           BITS: ${{ matrix.arch == 'x86_64' && '64' || '32' }}
           DIR: ${{ matrix.arch == 'x86_64' && 'x64' || 'x86' }}
         shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
         run: >-
+          cp -a psmisc/psmisc-*.src/psmisc-*/inst/usr/bin/killall.exe output &&
           wget -O WinDivert.zip https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip &&
           unzip -j WinDivert.zip "*/${DIR}/WinDivert.dll" "*/${DIR}/WinDivert${BITS}.sys" -d output &&
           zip zapret-win-${{ matrix.arch }}.zip -j output/*
