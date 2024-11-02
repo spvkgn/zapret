@@ -19,12 +19,7 @@ jobs:
       matrix:
         include:
           - arch: x86
-            tool: x86_64-multilib-linux-musl
-            env:
-              CFLAGS: '-m32 -march=i586 -mtune=intel'
-              LDFLAGS: '-m32 -march=i586 -mtune=intel'
-          # - arch: x86-64
-          #   tool: x86_64-multilib-linux-musl
+            target: 'x86/geode'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,29 +29,32 @@ jobs:
 
       - name: Set up build tools
         env:
-          REPO: 'spvkgn/musl-cross'
-          TOOL: ${{ matrix.tool }}
+          TARGET: ${{ matrix.target }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt update -qq && sudo apt install -y libcap-dev
-          mkdir -p $HOME/tools
-          wget -qO- https://github.com/$REPO/releases/download/latest/$TOOL.tar.xz | tar -C $HOME/tools -xJ || exit 1
-          [ -d "$HOME/tools/$TOOL/bin" ] && echo "$HOME/tools/$TOOL/bin" >> $GITHUB_PATH
+          URL=https://downloads.openwrt.org/releases
+          VERSION=$(gh api repos/openwrt/openwrt/releases/latest --jq '.tag_name' | sed 's/^v//')
+          mkdir -p $HOME/openwrt/staging_dir
+          TOOLCHAIN=$(wget -qO- $URL/$VERSION/targets/$TARGET | grep -Po 'href="\Kopenwrt-toolchain.+?(?=")')
+          wget $URL/$VERSION/targets/$TARGET/$TOOLCHAIN $URL/$VERSION/targets/$TARGET/sha256sums
+          grep 'openwrt-toolchain' sha256sums | sha256sum -c - && tar -C $HOME/openwrt -xf $TOOLCHAIN
+          find $HOME/openwrt -maxdepth 3 -path '*/openwrt-*/bin' -type d >> $GITHUB_PATH
 
       - name: Build
         id: build
         env:
           ARCH: ${{ matrix.arch }}
-          TARGET: ${{ matrix.tool }}
-          CFLAGS: ${{ matrix.env.CFLAGS }}
-          LDFLAGS: ${{ matrix.env.LDFLAGS }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TARGET=$(find $HOME/openwrt -type f -name 'info.mk' -exec grep -Po 'TARGET_CROSS=\K.*' {} \;)
           DEPS_DIR=$GITHUB_WORKSPACE/deps
-          export CC="$TARGET-gcc"
-          export LD=$TARGET-ld
-          export AR=$TARGET-ar
-          export NM=$TARGET-nm
-          export STRIP=$TARGET-strip
+          export CC=${TARGET}gcc
+          export LD=${TARGET}ld
+          export AR=${TARGET}ar
+          export NM=${TARGET}nm
+          export STRIP=${TARGET}strip
+          export STAGING_DIR=$HOME/openwrt/staging_dir
           export PKG_CONFIG_PATH=$DEPS_DIR/lib/pkgconfig
 
           # netfilter libs
@@ -68,7 +66,7 @@ jobs:
             (
               cd $i
               ./autogen.sh && \
-              ./configure --prefix= --host=$TARGET --enable-static --disable-shared && \
+              ./configure --prefix= --host=${TARGET%-} --enable-static --disable-shared && \
               make install -j$(nproc) DESTDIR=$DEPS_DIR
             )
             sed -i "s|^prefix=.*|prefix=$DEPS_DIR|g" $DEPS_DIR/lib/pkgconfig/$i.pc
