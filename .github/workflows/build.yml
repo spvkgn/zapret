@@ -270,7 +270,7 @@ jobs:
           cp -a -t ../output nfq/winws.exe /usr/bin/cygwin1.dll &&
           ldd ../output/winws.exe
 
-      - name: Add files to zip
+      - name: Add files
         env:
           BITS: ${{ matrix.arch == 'x86_64' && '64' || '32' }}
           DIR: ${{ matrix.arch == 'x86_64' && 'x64' || 'x86' }}
@@ -278,8 +278,17 @@ jobs:
         run: >-
           cp -a psmisc/psmisc-*.src/psmisc-*/inst/usr/bin/killall.exe output &&
           wget -O WinDivert.zip https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip &&
-          unzip -j WinDivert.zip "*/${DIR}/WinDivert.dll" "*/${DIR}/WinDivert${BITS}.sys" -d output &&
-          zip zapret-win-${{ matrix.arch }}.zip -j output/*
+          unzip -j WinDivert.zip "*/${DIR}/WinDivert.dll" "*/${DIR}/WinDivert${BITS}.sys" -d output
+
+      - name: Run upx
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          files: ./output/cygwin1.dll
+          args: --force --best --lzma
+
+      - name: Create zip
+        shell: C:\cygwin\bin\bash.exe -e '{0}'
+        run: zip zapret-win-${{ matrix.arch }}.zip -j output/*
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
