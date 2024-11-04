@@ -224,6 +224,8 @@ jobs:
         uses: cygwin/cygwin-install-action@v4
         with:
           platform: ${{ matrix.arch }}
+          site: ${{ matrix.arch == 'x86_64' && 'http://ctm.crouchingtigerhiddenfruitbat.org/pub/cygwin/circa/64bit/2024/01/30/231215' || null }}
+          check-sig: ${{ matrix.arch == 'x86_64' && 'false' || null }}
           packages: >-
             gcc-core
             make
@@ -299,6 +301,7 @@ jobs:
         id: bins
         with:
           path: zapret/binaries
+          pattern: zapret-*
 
       - name: Install upx
         uses: crazy-max/ghaction-upx@v3
