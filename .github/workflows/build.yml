@@ -197,8 +197,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # arch: [x86_64, x86]
-        arch: [x86_64]
+        arch: [x86_64, x86]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -277,8 +276,7 @@ jobs:
           mkdir -p output &&
           cd zapret &&
           make -C nfq ${TARGET} &&
-          cp -a nfq/winws.exe ../output &&
-          ldd ../output/winws.exe
+          cp -a nfq/winws.exe ../output
 
       - name: Create zip
         env:
@@ -286,6 +284,7 @@ jobs:
           DIR: ${{ matrix.arch == 'x86_64' && 'x64' || 'x86' }}
         shell: C:\cygwin\bin\bash.exe -e '{0}'
         run: >-
+          ls -lh output &&
           cp -a -t output psmisc/psmisc-*.src/psmisc-*/inst/usr/bin/killall.exe /usr/bin/cygwin1.dll &&
           wget -O WinDivert.zip https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip &&
           unzip -j WinDivert.zip "*/${DIR}/WinDivert.dll" "*/${DIR}/WinDivert${BITS}.sys" -d output &&
