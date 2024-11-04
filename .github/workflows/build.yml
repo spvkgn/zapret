@@ -2,7 +2,7 @@ name: build
 
 on:
   workflow_dispatch:
-  # push:
+  push:
     # tags:
     #   - [0-9]+
     # branches:
@@ -237,6 +237,8 @@ jobs:
         uses: cygwin/cygwin-install-action@v4
         with:
           platform: ${{ matrix.arch }}
+          site: ${{ matrix.arch == 'x86_64' && 'http://ctm.crouchingtigerhiddenfruitbat.org/pub/cygwin/circa/64bit/2024/01/30/231215' || null }}
+          check-sig: ${{ matrix.arch == 'x86_64' && 'false' || null }}
           packages: >-
             gcc-core
             make
@@ -288,6 +290,13 @@ jobs:
           wget -O WinDivert.zip https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip &&
           unzip -j WinDivert.zip "*/${DIR}/WinDivert.dll" "*/${DIR}/WinDivert${BITS}.sys" -d output &&
           zip zapret-win-${{ matrix.arch }}.zip -j output/*
+
+      - name: Upload cygwin logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cygwin-logs-${{ matrix.arch }}
+          path: C:\cygwin\var\log
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
