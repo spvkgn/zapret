@@ -15,6 +15,7 @@ on:
 
 jobs:
   build-linux:
+    if: false
     name: Linux ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
@@ -128,6 +129,7 @@ jobs:
           if-no-files-found: error
 
   build-macos:
+    if: false
     name: macOS
     runs-on: macos-latest
     steps:
@@ -151,6 +153,7 @@ jobs:
           if-no-files-found: error
 
   build-freebsd:
+    if: false
     name: FreeBSD ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
@@ -194,7 +197,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, x86]
+        # arch: [x86_64, x86]
+        arch: [x86_64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -203,6 +207,7 @@ jobs:
           path: zapret
 
       - name: Set up MinGW
+        if: false
         uses: msys2/setup-msys2@v2
         with:
           msystem: ${{ matrix.arch == 'x86_64' && 'MINGW64' || 'MINGW32' }}
@@ -210,6 +215,7 @@ jobs:
             ${{ matrix.arch == 'x86_64' && 'mingw-w64-x86_64-toolchain' || 'mingw-w64-i686-toolchain' }}
 
       - name: Build ip2net, mdig
+        if: false
         shell: msys2 {0}
         run: |
           mkdir -p output
@@ -266,6 +272,7 @@ jobs:
         shell: C:\cygwin\bin\bash.exe -eo pipefail '{0}'
         run: >-
           export MAKEFLAGS=-j$(nproc) &&
+          mkdir -p output &&
           cd zapret &&
           make -C nfq ${TARGET} &&
           cp -a nfq/winws.exe ../output &&
@@ -290,7 +297,8 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: github.event_name != 'workflow_dispatch'
+    if: false
+    # if: github.event_name != 'workflow_dispatch'
     needs: [build-linux, build-windows, build-macos, build-freebsd]
     permissions:
       contents: write
