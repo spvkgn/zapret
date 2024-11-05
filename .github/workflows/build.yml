@@ -81,6 +81,8 @@ jobs:
           export NM=$TARGET-nm
           export STRIP=$TARGET-strip
           export PKG_CONFIG_PATH=$DEPS_DIR/lib/pkgconfig
+          export CFLAGS="-Os -flto=auto"
+          export LDFLAGS="-Os"
 
           # netfilter libs
           git clone --depth 1 -b libmnl-1.0.5 git://git.netfilter.org/libmnl
@@ -102,7 +104,7 @@ jobs:
             xargs -I{} wget -qO- https://github.com/madler/zlib/archive/refs/tags/{}.tar.gz | tar -xz
           (
             cd zlib-*
-            CFLAGS="-Os" ./configure --prefix= --static && \
+            ./configure --prefix= --static && \
             make install -j$(nproc) DESTDIR=$DEPS_DIR
           )
 
@@ -112,8 +114,8 @@ jobs:
           install -Dm644 -t $DEPS_DIR/include/sys /usr/include/x86_64-linux-gnu/sys/queue.h /usr/include/sys/capability.h
 
           # zapret
-          CFLAGS="-Os -static-libgcc -static -I$DEPS_DIR/include" \
-          LDFLAGS="-Os -L$DEPS_DIR/lib" \
+          CFLAGS="$CFLAGS -static-libgcc -static -I$DEPS_DIR/include" \
+          LDFLAGS="$LDFLAGS -L$DEPS_DIR/lib" \
           make -C zapret -j$(nproc)
           tar -C zapret/binaries/my -cJf zapret-linux-$ARCH.tar.xz .
 
@@ -374,7 +376,6 @@ jobs:
           draft: false
           body: |
             ### zapret ${{ github.ref_name }}
-          target_commitish : master
           files: |
             zapret*.tar.gz
             zapret*.zip
