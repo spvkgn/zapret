@@ -4,8 +4,8 @@ run-name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Release {0}', git
 on:
   workflow_dispatch:
   push:
-    tags:
-      - v[0-9]+*
+    # tags:
+    #   - v[0-9]+*
     # branches:
     #   - master
     # paths:
@@ -65,7 +65,7 @@ jobs:
         run: |
           sudo apt update -qq && sudo apt install -y libcap-dev
           mkdir -p $HOME/tools
-          wget -qO- https://github.com/$REPO/releases/download/latest/$TOOL.tar.xz | tar -C $HOME/tools -xJ || exit 1
+          wget -qO- https://github.com/$REPO/releases/download/20241117/$TOOL.tar.xz | tar -C $HOME/tools -xJ || exit 1
           [ -d "$HOME/tools/$TOOL/bin" ] && echo "$HOME/tools/$TOOL/bin" >> $GITHUB_PATH
 
       - name: Build
@@ -128,6 +128,7 @@ jobs:
           if-no-files-found: error
 
   build-macos:
+    if: false
     name: macOS
     runs-on: macos-latest
     steps:
@@ -147,6 +148,7 @@ jobs:
           if-no-files-found: error
 
   build-freebsd:
+    if: false
     name: FreeBSD ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
@@ -181,6 +183,7 @@ jobs:
           if-no-files-found: error
 
   build-windows:
+    if: false
     name: Windows ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
@@ -282,6 +285,7 @@ jobs:
           if-no-files-found: error
 
   build-android:
+    if: false
     name: Android ${{ matrix.abi }}
     runs-on: ubuntu-latest
     strategy:
