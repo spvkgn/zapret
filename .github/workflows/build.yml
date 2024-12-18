@@ -75,7 +75,7 @@ jobs:
           if [[ "$ARCH" == lexra ]]; then
             sudo dpkg --add-architecture i386
             sudo apt update -qq
-            sudo apt install -y libcap-dev libc6:i386 zlib1g:i386
+            sudo apt install -y libcap-dev zlib1g:i386
             URL=https://github.com/$REPO/raw/refs/heads/master/$DIR.txz
           else
             sudo apt update -qq
@@ -411,7 +411,7 @@ jobs:
                   if [[ $dir == *-linux-x86_64 ]]; then
                     tar -C $dir -czvf $dir/tpws_wsl.tgz tpws
                     run_upx $dir/*
-                  elif [[ $dir =~ linux ]] && [[ $dir != *-linux-mips64 ]] && [[ $dir != *-linux-lexra ]]; then
+                  elif [[ $dir =~ linux ]] && [[ ! $dir =~ linux-(mips64|lexra) ]]; then
                     run_upx $dir/*
                   fi
                   ;;
